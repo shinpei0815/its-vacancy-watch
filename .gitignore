@@ -44,3 +44,7 @@ next-env.d.ts
 /.codex/
 /outputs/
 /work/
+/.dev.vars*
+/site-artifact.tar.gz
+/.openai/hosting.json
+*.tsbuildinfo
