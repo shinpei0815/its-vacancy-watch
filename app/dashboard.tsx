@@ -62,7 +62,6 @@ import { Toaster } from "@/components/ui/sonner";
 
 const OFFICIAL_CALENDAR_URL =
   "https://as.its-kenpo.or.jp/apply/empty_calendar?s=PUV6TjMwRFpwWlNaMUpIZDlrSGR3MVda";
-const AUTO_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 const RESULT_REFRESH_INTERVAL_MS = 60 * 1000;
 
 type Facility = {
@@ -189,8 +188,6 @@ export function Dashboard({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Watch | null>(null);
   const [checkingId, setCheckingId] = useState<number | null>(null);
-  const [autoChecking, setAutoChecking] = useState(false);
-  const [nextAutoCheckAt, setNextAutoCheckAt] = useState<Date | null>(null);
   const [facility, setFacility] = useState("758");
   const [checkIn, setCheckIn] = useState(today);
   const [nights, setNights] = useState("1");
@@ -257,59 +254,6 @@ export function Dashboard({
     () => watches.filter((watch) => watch.active).length,
     [watches]
   );
-
-  const autoCheckActiveWatches = useCallback(async () => {
-    setAutoChecking(true);
-    try {
-      const response = await fetch("/api/watches/check-active", {
-        method: "POST",
-      });
-      const data = (await response.json()) as {
-        watches?: Watch[];
-        checkedCount?: number;
-        errorCount?: number;
-        error?: string;
-      };
-      if (!response.ok || !data.watches) {
-        throw new Error(data.error ?? "自動確認に失敗しました");
-      }
-
-      const updates = new Map(data.watches.map((watch) => [watch.id, watch]));
-      setWatches((current) =>
-        current.map((watch) => updates.get(watch.id) ?? watch)
-      );
-
-      const availableCount = data.watches.filter(
-        (watch) => watch.status === "available" || watch.status === "limited"
-      ).length;
-      if ((data.checkedCount ?? 0) > 0 && availableCount > 0) {
-        toast.success(`空きのある条件が${availableCount}件見つかりました`);
-      } else if ((data.errorCount ?? 0) > 0) {
-        toast.error(`${data.errorCount}件の自動確認に失敗しました`);
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "自動確認に失敗しました");
-    } finally {
-      setAutoChecking(false);
-      setNextAutoCheckAt(new Date(Date.now() + AUTO_CHECK_INTERVAL_MS));
-    }
-  }, []);
-
-  useEffect(() => {
-    if (loading || activeCount === 0) {
-      setNextAutoCheckAt(null);
-      return;
-    }
-
-    setNextAutoCheckAt(new Date(Date.now() + AUTO_CHECK_INTERVAL_MS));
-    const intervalId = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        void autoCheckActiveWatches();
-      }
-    }, AUTO_CHECK_INTERVAL_MS);
-
-    return () => window.clearInterval(intervalId);
-  }, [activeCount, autoCheckActiveWatches, loading]);
 
   async function addWatch() {
     if (!checkIn || !email.trim()) {
@@ -527,19 +471,10 @@ export function Dashboard({
                   <p className="mt-1 text-sm text-slate-500">条件はいつでも停止・削除できます</p>
                 </div>
                 <div className="inline-flex items-center gap-2 self-start rounded-full border border-[#b9ddd9] bg-[#edf8f7] px-3 py-1.5 text-xs font-medium text-[#17665f]">
-                  {autoChecking ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <Clock3 className="size-3.5" />
-                  )}
+                  <Clock3 className="size-3.5" />
                   {activeCount === 0
                     ? "監視条件を登録すると自動確認を開始"
-                    : nextAutoCheckAt
-                      ? `画面表示中は15分ごとに確認・次回 ${new Intl.DateTimeFormat("ja-JP", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        }).format(nextAutoCheckAt)}`
-                      : "画面表示中は15分ごとに確認"}
+                    : "3分ごとに定期確認・結果は画面に自動反映"}
                 </div>
               </div>
 
@@ -573,7 +508,7 @@ export function Dashboard({
                   <div>
                     <h2 className="font-bold text-[#174b50]">自動監視について</h2>
                     <p className="mt-2 text-sm leading-6 text-[#42666a]">
-                      画面を閉じていても15分ごとに空室を確認し、新たな空きが見つかったらメールでお知らせします。施設一覧はITS公式と同期し、空きがある施設の申込画面へ進めます。日付・泊数・人数は公式画面で選択してください。
+                      3分ごとに空室を確認します。開いている画面には結果が自動反映され、新たな空きはメールでお知らせします。施設一覧はITS公式と同期し、空きがある施設の申込画面へ進めます。日付・泊数・人数は公式画面で選択してください。
                     </p>
                   </div>
                 </div>
@@ -738,7 +673,7 @@ function NavContent() {
         <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
           <CheckCircle2 className="size-4 text-teal-200" /> 自動監視 稼働中
         </div>
-        <p className="text-xs leading-5 text-teal-50/70">15分ごとに空室を確認。画面を閉じていても、新たな空きはメールでお知らせします。</p>
+        <p className="text-xs leading-5 text-teal-50/70">3分ごとに空室を確認。画面を閉じていても、新たな空きはメールでお知らせします。</p>
       </div>
     </nav>
   );
